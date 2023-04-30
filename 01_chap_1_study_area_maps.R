@@ -32,63 +32,72 @@ library(rnaturalearthdata)
 library(ggplot2)
 theme_set(theme_bw())
 library(maps)
+library(tools)
+devtools::install_github("ropensci/rnaturalearthhires")
 
 world <- ne_countries(scale='medium',returnclass = 'sf')
 class(world)
 
 #### load in camera locations
+points_tawa <- st_read(here("data", "wa_camera_points.shp"))
+points_tawa <- st_as_sf(points_tawa)
 
-all_sites <- read.csv(here("data", "counts_cleaned.csv"), stringsAsFactors = FALSE)
+#### load in regional map for inset using rnaturalearth and maps
 
-# create new column for utm zone 
-data_10_WA <- all_sites %>% subset(City == "tawa") # add seattle later 
-data_10_WA$utmZone <- "10"
+states_all <- ne_states(
+  country = c("canada", "united states of america"),
+  returnclass = "sf"
+)
 
-
-# transform into UTM - WA
-utm1 <- data.frame(x=data_10_WA$Long, y=data_10_WA$Lat) 
-coordinates(utm1) <- ~x+y 
-proj4string(utm1) <- CRS("+proj=longlat +datum=WGS84") 
-utm2 <- spTransform(utm1,CRS("+init=epsg:32610"))
-
-data_10_WA$utmEast <- utm2$x
-data_10_WA$utmNorth <- utm2$y
-
-# turn coordinates into spatial points
-points_WA <- data_10_WA %>% distinct(Site, .keep_all = TRUE) %>%
-  st_as_sf(coords = c("utmEast", "utmNorth"), crs = 
-             32610)
-points_WA
+states_all <- states_all %>%
+  filter(name_en == "Washington" | 
+           name_en == "British Columbia")
 
 
-# keep only 1 unique site row for each 
-
-points_WA <- points_WA %>% distinct(Site, .keep_all = TRUE)
-points_WA$Site
-
-#### load in regional map for inset 
-?usmap
-
-world <- ne_countries(scale='medium',returnclass = 'sf')
-class(world)
+# bring in county borders 
+counties <- st_as_sf(map("county", plot = FALSE, fill = TRUE))
 
 
-# load county names to label map library("maps")
-states <- st_as_sf(map("state", plot = FALSE, fill = TRUE))
-head(states)
+# keep only WA counties 
+counties <- subset(counties, grepl("washington", counties$ID))
+
+# let's put everything in the same proj 
+counties <- counties %>% st_transform(st_crs(states_all))
+points_tawa <- points_tawa  %>% st_transform(st_crs(states_all))
+st_crs(states_all) == st_crs(counties) 
+
+# make the big map
+(washington <- ggplot(data = states_all) +
+    geom_sf(fill = "antiquewhite1") +
+  #   geom_sf(data = water, fill = NA, color = gray(.5)) + 
+     geom_sf(data = counties, fill = NA, color = gray(.5)) + 
+#      geom_sf(data = points_tawa, size = 1, shape = 23, fill = "darkred") +
+#     annotate(geom = "text", x = -85.5, y = 27.5, label = "Gulf of Mexico", 
+   #           color = "grey22", size = 4.5) +
+    coord_sf(xlim = c(-127, -120), ylim = c(46.5, 49), expand = FALSE) +
+    xlab("Longitude")+ ylab("Latitude")+
+    theme(panel.grid.major = element_line(colour = gray(0.5), linetype = "dashed", 
+                                          size = 0.5), panel.background = element_rect(fill = "aliceblue"), 
+          panel.border = element_rect(fill = NA)))
 
 
+# add cities 
+# wacities <- data.frame(state = rep("Washington", 5), city = c("Miami", 
+ #                                                           "Tampa", "Orlando", "Jacksonville", "Sarasota"), lat = c(25.7616798, 
+  #                                                                                                                   27.950575, 28.5383355, 30.3321838, 27.3364347), lng = c(-80.1917902, 
 
 
-
-
-
-
-
-
-
-
-
+# make study site map 
+(siteA <- ggplot(data = states_all) +
+   geom_sf(fill = "antiquewhite1") +
+    geom_sf(data = water, fill = "aliceblue", color = gray(.5)) + 
+   geom_sf(data = points_tawa, size = 2, shape = 23, fill = "darkred") +
+   coord_sf(xlim = c(-122.8,-122.30), ylim= c(47.18,47.5), expand = FALSE) + 
+   annotate("text", x = -122.65, y = 47.4, label= "Site A", size = 6) + 
+   theme_void() + 
+   theme(panel.grid.major = element_line(colour = gray(0.5), linetype = "dashed", 
+                                         size = 0.5), panel.background = element_rect(fill = "aliceblue"), 
+         panel.border = element_rect(fill = NA)))
 
 
 
@@ -98,7 +107,7 @@ wa_map <- st_read(here("data", "tract20.shp")) %>%
   na.omit()
 
 wa_map <- wa_map %>% st_transform(crs = 4326) %>% 
-  st_crop(c(xmin = -122.7, xmax = -121.32, ymin = 47.13, ymax = 48.5))
+  st_crop(c(xmin = -127, xmax = -123, ymin = 46, ymax = 48.5))
 
 
 # suggest top CRS 
@@ -106,8 +115,8 @@ suggest_top_crs(wa_map) # 6597 is projected CRS
 
 head(wa_map)
 
-wa_map <- wa_map %>% dplyr::filter(substr(GEOID20, 1, 5) 
-                                            %in% c("53033", "53053"))
+wa_map <- wa_map %>% dplyr::filter(substr(GEOID20, 1, 5),
+                                             %in% c("53033", "53053"))
 
 mapview(wa_map)
 # re-project and crop 
@@ -120,5 +129,5 @@ water <- st_read(here("data",
                       "DNR_Hydrography_-_Water_Bodies_-_Forest_Practices_Regulation.shp")) 
 
 sf_use_s2(FALSE)
-water <- water %>% st_transform(st_crs(wa_map)) %>%
-  st_crop(wa_map)
+water <- water %>% st_transform(st_crs(counties)) %>%
+  st_crop(counties)
