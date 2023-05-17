@@ -1,37 +1,16 @@
 ### yasmine hentati
 ### study area maps
 
+### load packages 
 
-# load packages
-library(mapview)
-library(tidyverse) # ggplot2, dplyr, tidyr, readr, purrr, tibble # pipes
-library(lintr) # code linting
-library(sf) # spatial data handling
-library(raster) # raster handling (needed for relief)
-library(viridis) # viridis color scale
-library(cowplot) # stack ggplots
-library(sf)
-library(sp)
-library(viridis)
-library(here)
-# if needed: remotes::install_github("walkerke/crsuggest") 
-library(crsuggest)
-library(terra)
-library(spatialEco)
-library(readr)
-library(ggfortify)
-library(rgeos)
-library(usmap)
-library(rnaturalearth)
-library(rnaturalearthdata)
-library(ggplot2)
-theme_set(theme_bw())
-library(maps)
-library(tools)
-library(rmapshaper)
-library(cowplot)
-library(ggrepel) 
-
+# install.packages("pacman")
+# remotes::install_github("walkerke/crsuggest") 
+library(pacman)
+pacman::p_load(ggplot2, tidyr, dplyr, mapview, lme4, magrittr, lintr, sf, 
+               raster, viridis, cowplot, markdown, sf, here, tidycensus,
+               crsuggest, terra, spatialEco, readr, ggfortify, rgeos, usmap,
+               rnaturalearth, rnaturalearthdata, maps, tools, stringr,
+               rmapshaper, cowplot, ggrepel, ggspatial, extrafont)
 
 #### load in camera locations
 points_tawa <- st_read(here("data", "wa_camera_points.shp"))
@@ -73,25 +52,39 @@ st_crs(water) == st_crs(wa_map)
 # clip counties shapefile to water 
 
 wa_crop <- ms_erase(wa_map, water)
-mapview(wa_crop) # for now we'll be lazy and manually erase the lines in the 
+# mapview(wa_crop) # for now we'll be lazy and manually erase the lines in the 
 # water (that line up with canadian borders) later
 
-# clip water 
+
+# add cities 
+# wacities <- data.frame(state = rep("Washington", 5), 
+#                    city = c("Seattle", "Tacoma", 
+#                             "Olympia", "Port Angeles", "Everett"), 
+#                    lat = c(25.7616798, 
 
 
 # make the big map
-(washington <- ggplot(data = wa_crop) +
-    geom_sf(fill = "antiquewhite1") +
+washington <- ggplot(data = wa_crop) +
+    geom_sf(fill = "antiquewhite4", color = NA) +
  #      geom_sf(data = water, fill = "alice blue", color = gray(.2)) + 
 #      geom_sf(data = points_tawa, size = 1, shape = 23, fill = "darkred") +
 #     annotate(geom = "text", x = -85.5, y = 27.5, label = "Gulf of Mexico", 
    #           color = "grey22", size = 4.5) +
-    coord_sf(xlim = c(-125.5, -121), ylim = c(46.6, 48.5), expand = FALSE) +
+#     geom_sf(data = wacities) +
+# #     geom_text_repel(data = flcities, aes(x = lng, y = lat, label = city), 
+ #                    fontface = "bold", nudge_x = c(1, -1.5, 2, 2, -1), nudge_y = c(0.25, 
+ #                                                                                   -0.25, 0.5, 0.5, -0.5)) +
+    coord_sf(xlim = c(-123.5, -121.5), ylim = c(46.6, 48.5), expand = FALSE) +
     xlab("Longitude")+ ylab("Latitude")+
     theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "aliceblue"), 
-          panel.border = element_rect(fill = NA)) + 
+          panel.border = element_rect(fill = NA)) +     
+    annotation_scale(location = "bl", width_hint = 0.4) +
+    annotation_north_arrow(location = "bl", which_north = "true", 
+                           pad_x = unit(0.5, "in"), pad_y = unit(0.5, "in"),
+                           style = north_arrow_fancy_orienteering) + 
 
     # add bounding boxes for study areas
+    # tacoma 
   geom_rect(
     xmin = -122.6,
     ymin = 47.17,
@@ -100,54 +93,135 @@ mapview(wa_crop) # for now we'll be lazy and manually erase the lines in the
     fill = NA, 
     colour = "red",
     size = 1
-  ))
+  ) +
+  
+  # seattle 
+  geom_rect(
+    xmin = -122.54,
+    ymin = 47.36,
+    xmax = -121.85,
+    ymax = 47.77,
+    fill = NA, 
+    colour = "red",
+    size = 1
+  )
 
 
-
-# add cities 
-# wacities <- data.frame(state = rep("Washington", 5), 
-    #                   city = c("Seattle", "Tacoma", 
-    #                            "Olympia", "Port Angeles", "Everett"), 
-    #                   lat = c(25.7616798, 
-
-
-#ggplot(data = world) +
-#  geom_sf() +
-#  geom_sf(data = counties, fill = NA, color = gray(.5)) +
-#  geom_sf(data = flcities) +
-#  geom_label_repel(data = flcities, aes(x = lng, y = lat, label = city), 
-#                  fontface = "bold", nudge_x = c(1, -1.5, 2, 2, -1), nudge_y = c(0.25, 
-#                                                                                 -0.25, 0.5, 0.5, -0.5)) +
- # coord_sf(xlim = c(-88, -78), ylim = c(24.5, 33), expand = FALSE)
 
 # clip tract shapefile to water 
-
 tract_crop <- ms_erase(wa_tract, water)
 
+# read in env health data 
+env_data <- read_csv(here("data", "env_health_ranks_wa.csv"))
 
+env_WA_sp <- merge(tract_crop, env_data, by.x = "GEOID20",
+                   by.y = "GEOID", all.x = TRUE) 
+
+# crop to only king and pierce counties 
+env_WA_sp <- env_WA_sp %>% dplyr::filter(substr(GEOID20, 1, 5) 
+                                 %in% c("53053", "53033"))
+
+###########
 # make study site map - tacoma 
-(TAWA <- ggplot(data = tract_crop) +
-   geom_sf(fill = "antiquewhite1") +
- #    geom_sf(data = water, fill = "aliceblue", color = gray(.5)) + 
-   geom_sf(data = points_tawa, size = 4, shape = 23, fill = "darkred") +
-   coord_sf(xlim = c(-122.6,-122.30), ylim= c(47.17,47.35), expand = FALSE) + 
-   annotate("text", x = -122.48, y = 47.32, label= "Tacoma", size = 6) + 
- #    xlab("Longitude")+ ylab("Latitude") + 
-    theme_void() + 
-   theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "aliceblue"), 
-         panel.border = element_rect(fill = NA)))
+TAWA <- env_WA_sp %>% 
+  ggplot() +
+  geom_sf(
+    aes(fill = Rank), 
+    lwd = 0,
+    colour = "white") +
+  scale_fill_gradientn(
+    colors = c("#9DBF9E", "#FCB97D", "#A84268"),
+    na.value = "grey80",
+    limits = c(0, 10),
+  #   oob = scales::squish,
+  #   labels = scales::percent,
+    name = "Environmental health \nexposures and effects") +
+  geom_sf(data = points_tawa, size = 2, shape = 23, fill = "darkred") +
+  coord_sf(xlim = c(-122.6,-122.30), ylim= c(47.17,47.35), expand = FALSE) + 
+  annotate("text", x = -122.48, y = 47.32, label= "Tacoma", fontface = "bold",
+           family = "Futura-Bold", size = 6) + 
+  annotation_scale(location = "bl", width_hint = 0.4) +
+  #    xlab("Longitude")+ ylab("Latitude") + 
+  theme_void() + 
+  theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "aliceblue"), 
+        panel.border = element_rect(fill = NA)) + 
+#  theme(
+    # legend.justification defines the edge of the legend that the legend.position coordinates refer to
+#    legend.justification = c(0, 1),
+    # Set the legend flush with the left side of the plot, and just slightly below the top of the plot
+ #   legend.position = c(0, .95)
+#   ) +     
+  theme(
+    text = element_text(family = "Futura-Bold"),
+    legend.title = element_text(family = "Futura-Bold", size = 10),
+    legend.text = element_text(family = "Futura-Medium", size = 10)
+  ) + theme(legend.position = "none")
+
+TAWA
+
 
 # make study site map - seattle 
-(SEWA <- ggplot(data = tract_crop) +
-    geom_sf(fill = "antiquewhite1") +
-    #    geom_sf(data = water, fill = "aliceblue", color = gray(.5)) + 
-    geom_sf(data = points_sewa, size = 4, shape = 23, fill = "darkred") +
-    coord_sf(xlim = c(-121.85,-122.54), ylim= c(47.36,47.77), expand = FALSE) + 
-    annotate("text", x = -122.44, y = 47.6, label= "Seattle", size = 6) + 
-    #    xlab("Longitude")+ ylab("Latitude") + 
-    theme_void() + 
-    theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "aliceblue"), 
-          panel.border = element_rect(fill = NA)))
+
+SEWA <- env_WA_sp %>% 
+  ggplot() +
+  geom_sf(
+    aes(fill = Rank), 
+    lwd = 0,
+    colour = "white") +
+  scale_fill_gradientn(
+    colors = c("#9DBF9E", "#FCB97D", "#A84268"),
+    na.value = "grey80",
+    limits = c(0, 10),
+#     oob = scales::squish,
+    #   labels = scales::percent,
+    name = "Environmental health rankings") +
+  geom_sf(data = points_sewa, size =2, shape = 23, fill = "darkred") +
+  coord_sf(xlim = c(-121.85,-122.54), ylim= c(47.36,47.77), expand = FALSE) + 
+  annotate("text", x = -122.44, y = 47.61, label= "Seattle", 
+           fontface = "bold", family = "Futura-Bold", size = 6) + 
+  annotation_scale(location = "bl", width_hint = 0.4) +
+  #    xlab("Longitude")+ ylab("Latitude") + 
+  theme_void() + 
+  theme(panel.grid.major = element_blank(), panel.background = element_rect(fill = "aliceblue"), 
+        panel.border = element_rect(fill = NA))  + 
+  theme(legend.position = "none")
+
+
+
+# create arrows for bigger map 
+arrowA <- data.frame(x1 = 11, x2 = 16, y1 = 10.5, y2 = 14.5)
+arrowB <- data.frame(x1 = 8.5, x2 = 15, y1 = 7.5, y2 = 5.5)
+
+
+
+# get the legend 
+
+# extract legend from plot1
+legend <- get_legend(
+  TAWA +
+    guides(color = guide_legend(nrow = 1)) +
+    theme(legend.position = "bottom") +     
+    theme(
+      text = element_text(family = "Futura-Medium"),
+      legend.title = element_text(family = "Futura-Bold", size = 10),
+      legend.text = element_text(family = "Futura-Medium", size = 10)) + 
+    theme(
+      legend.direction="vertical")
+    ) 
+
+
+set_null_device("png")
+
+ggdraw(xlim = c(0, 28), ylim = c(0, 20)) +
+    draw_plot(washington, x = 0, y = 0, width = 13, height = 20) +
+  draw_plot(SEWA, x = 13, y = 10, width = 12, height = 10) +
+  draw_plot(TAWA, x = 13, y = 0, width = 12, height = 10) +
+  geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2), data = arrowA, 
+               arrow = arrow(), lineend = "round") +
+  geom_segment(aes(x = x1, y = y1, xend = x2, yend = y2), data = arrowB, 
+               arrow = arrow(), lineend = "round") +  
+  draw_plot(legend, x = 25, y = 5, width = 2, height = 10) 
+  
 
 
 
