@@ -7,21 +7,17 @@ pacman::p_load(ggplot2, tidyr, dplyr, mapview, lme4, magrittr, lintr, sf,
                raster, viridis, cowplot, markdown, sf, here, tidycensus,
                crsuggest, terra, spatialEco, readr, ggfortify, rgeos, usmap,
                rnaturalearth, rnaturalearthdata, maps, tools, stringr,
-               rmapshaper, cowplot, ggrepel, ggspatial, extrafont)
+               rmapshaper, cowplot, ggrepel, ggspatial, extrafont, 
+               janitor, rstatix, flextable)
 
 
 # load in points 
 
-
-#### load in camera locations
-
-
-scats <- read_csv(here("data", "otter_scats_5-27-23.csv")) 
-
+scats <- read_csv(here("data", "Otter_scat_data.csv")) %>% drop_na(any_of("Scat ID"))
 
 # keep only otters, drop NAs 
-scats <- scats %>% # drop_na(Latitude) %>% drop_na(Longitude) %>% 
-  filter(Species == "River otter")
+# scats <- scats %>% # drop_na(Latitude) %>% drop_na(Longitude) %>% 
+#   filter(Species == "River otter")
 
 
 summary <- scats %>%                         
@@ -36,6 +32,8 @@ sapply(scats$Latitude, class)
 # change to numeric 
 scats$Latitude <- as.numeric(scats$Latitude)
 scats$Longitude <- as.numeric(scats$Longitude)
+
+
 
 # turn into sf 
 scats <- st_as_sf(scats, coords = c("Longitude", "Latitude"), crs = 
@@ -126,3 +124,28 @@ env_WA_sp <- env_WA_sp %>% dplyr::filter(substr(GEOID20, 1, 5)
 
 
 
+
+#### descriptive tables 
+
+# change date to date 
+scats$Date <- as.Date(scats$Date, "%m/%d/%Y")
+
+# add month column
+
+scats[,"month"] <- format(scats$Date, "%m")
+
+)
+
+scats %>% tabyl(Site)
+scats %>% tabyl(month)
+
+
+scats_wide <- scats %>% pivot_longer(cols = c("Date"), names_to = "Site",values_to = "Scat ID")
+scats %>%                      
+  count(Site, month) %>%     # group and tabulate counts by two columns
+  ggplot()+                       # pass new data frame to ggplot
+  geom_col(                     # create bar plot
+    mapping = aes(   
+      x = outcome,              # map outcome to x-axis
+      fill = month,           # map age_cat to the fill
+      y = ))                   # map the counts column `n` to the height
